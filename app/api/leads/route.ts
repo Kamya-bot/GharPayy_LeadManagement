@@ -1,48 +1,74 @@
-import { NextResponse } from 'next/server';
-import connectToDatabase from '@/lib/mongodb';
-import Lead from '@/models/Lead';
-import Agent from '@/models/Agent';
-import Property from '@/models/Property';
+import { NextRequest, NextResponse } from "next/server";
+import dbConnect from "@/lib/mongodb";
+import Lead from "@/models/Lead";
 
-export async function GET() {
-  try {
-    await connectToDatabase();
-    
-    // In a real app, we might want to filter by user/org
-    const leads = await Lead.find({})
-      .populate('assignedAgentId', 'id name')
-      .populate('propertyId', 'id name')
-      .sort({ createdAt: -1 });
+// ─── GET /api/leads ────────────────────────────────────────────────────────
+export async function GET(req: NextRequest) {
+  await dbConnect();
 
-    // Transform to match the frontend expected structure (agents, properties instead of IDs)
-    const transformedLeads = leads.map(l => ({
-      ...l.toObject(),
-      id: l._id,
-      agents: l.assignedAgentId,
-      properties: l.propertyId
-    }));
+  const { searchParams } = new URL(req.url);
+  const stage = searchParams.get("stage");
+  const assignedTo = searchParams.get("assignedTo");
+  const zone = searchParams.get("zone");
+  const search = searchParams.get("search");
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = parseInt(searchParams.get("limit") || "50", 10);
 
-    return NextResponse.json(transformedLeads);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const query: Record<string, any> = {};
+  if (stage) query.stage = stage;
+  if (assignedTo) query.assignedTo = assignedTo;
+  if (zone) query.zone = zone;
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { phone: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+    ];
   }
+
+  const [leads, total] = await Promise.all([
+    Lead.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Lead.countDocuments(query),
+  ]);
+
+  return NextResponse.json({ leads, total, page, limit });
 }
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    await connectToDatabase();
-    
-    // Map snake_case from form to camelCase for model
-    const leadData = {
-      ...body,
-      preferredLocation: body.preferred_location || body.preferredLocation
-    };
-    
-    const lead = await Lead.create(leadData);
-    return NextResponse.json(lead, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
-  }
-}
+// ─── POST /api/leads ───────────────────────────────────────────────────────
+export async function POST(req: NextRequest) {
+  await dbConnect();
 
+  const body = await req.json();
+
+  const { initialNote, createdBy, ...leadData } = body;
+
+  // Strip empty strings from optional enum fields so Mongoose does not reject them
+  const optionalFields = [
+    "propertyType", "budget", "possession",
+    "email", "whatsapp", "zone", "preferredLocality", "nextFollowUpAt",
+  ];
+  for (const field of optionalFields) {
+    if (leadData[field] === "" || leadData[field] === null) {
+      delete leadData[field];
+    }
+  }
+
+  const activities = [];
+
+  // Auto-log "lead created" activity
+  activities.push({
+    type: "note",
+    note: initialNote || "Lead created",
+    performedBy: createdBy || "System",
+    createdAt: new Date(),
+  });
+
+  const lead = await Lead.create({ ...leadData, activities });
+
+  return NextResponse.json({ lead }, { status: 201 });
+}
