@@ -2,6 +2,7 @@
 
 import AppLayout from '@/components/AppLayout';
 import AddVisitDialog from '@/components/AddVisitDialog';
+import CreateBookingDialog from '@/components/CreateBookingDialog';
 import { useVisits } from '@/hooks/useCrmData';
 import { format } from 'date-fns';
 import { CalendarCheck, CheckCircle, XCircle, HelpCircle, Clock, MapPin, User } from 'lucide-react';
@@ -10,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
 const outcomeIcons: Record<string, JSX.Element> = {
   booked: <CheckCircle size={14} className="text-success" />,
@@ -21,12 +23,21 @@ const Visits = () => {
   const { data: visits, isLoading } = useVisits();
   const qc = useQueryClient();
 
+  // Booking dialog state
+  const [bookingVisit, setBookingVisit] = useState<null | {
+    id: string;
+    leadId?: string;
+    leadName: string;
+    leadPhone: string;
+    propertyName: string;
+  }>(null);
+
   const upcoming = visits?.filter(v => !v.outcome) || [];
   const past = visits?.filter(v => v.outcome) || [];
 
-  const handleOutcome = async (visitId: string, outcome: string) => {
+  const handleOutcome = async (visit: any, outcome: string) => {
     try {
-      const res = await fetch(`/api/visits/${visitId}`, {
+      const res = await fetch(`/api/visits/${visit.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ outcome }),
@@ -34,6 +45,17 @@ const Visits = () => {
       if (!res.ok) throw new Error('Failed to record outcome');
       toast.success('Outcome recorded');
       qc.invalidateQueries({ queryKey: ['visits'] });
+
+      // Auto-open booking dialog if outcome is booked
+      if (outcome === 'booked') {
+        setBookingVisit({
+          id: visit.id,
+          leadId: visit.leadId,
+          leadName: visit.leads?.name || visit.leadName || '',
+          leadPhone: visit.leads?.phone || visit.leadPhone || '',
+          propertyName: visit.properties?.name || visit.propertyName || '',
+        });
+      }
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -97,12 +119,12 @@ const Visits = () => {
                 <span className="flex items-center gap-1"><User size={10} /> {(visit.agents as any)?.name?.split(' ')[0] || 'TBD'}</span>
               </div>
               <div className="border-t border-border pt-3">
-                <Select onValueChange={v => handleOutcome(visit.id, v)}>
+                <Select onValueChange={v => handleOutcome(visit, v)}>
                   <SelectTrigger className="h-8 text-2xs rounded-xl"><SelectValue placeholder="Record outcome..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="booked">✓ Booked</SelectItem>
-                    <SelectItem value="considering">◉ Considering</SelectItem>
-                    <SelectItem value="not_interested">✕ Not Interested</SelectItem>
+                    <SelectItem value="booked">✅ Booked</SelectItem>
+                    <SelectItem value="considering">🤔 Considering</SelectItem>
+                    <SelectItem value="not_interested">❌ Not Interested</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -147,9 +169,21 @@ const Visits = () => {
           </table>
         </div>
       </div>
+
+      {/* Auto-open booking dialog when visit outcome = booked */}
+      {bookingVisit && (
+        <CreateBookingDialog
+          visit={bookingVisit}
+          open={!!bookingVisit}
+          onClose={() => setBookingVisit(null)}
+          onBooked={() => {
+            qc.invalidateQueries({ queryKey: ['bookings'] });
+            setBookingVisit(null);
+          }}
+        />
+      )}
     </AppLayout>
   );
 };
 
 export default Visits;
-

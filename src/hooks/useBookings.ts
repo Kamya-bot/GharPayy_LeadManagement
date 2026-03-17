@@ -26,6 +26,7 @@ export function useCreateBooking() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bookings'] });
+      qc.invalidateQueries({ queryKey: ['booking-stats'] });
       toast.success('Booking created');
     },
     onError: (e: any) => toast.error(e.message),
@@ -46,17 +47,19 @@ export function useUpdateBooking() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bookings'] });
+      qc.invalidateQueries({ queryKey: ['booking-stats'] });
       toast.success('Booking updated');
     },
     onError: (e: any) => toast.error(e.message),
   });
 }
 
+// Stats — uses /api/bookings?stats=1
 export function useBookingStats() {
   return useQuery({
     queryKey: ['booking-stats'],
     queryFn: async () => {
-      const res = await fetch('/api/bookings/stats');
+      const res = await fetch('/api/bookings?stats=1');
       if (!res.ok) throw new Error('Failed to fetch booking stats');
       return res.json();
     },
@@ -74,5 +77,3 @@ export function useBookingsByLead(leadId?: string) {
     },
   });
 }
-
-
