@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Sparkles, X } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface LeadForm {
   // Basic
@@ -36,6 +34,8 @@ interface LeadForm {
   priority: string;
   // Qualify
   stage: string;
+  inBlr: string;
+  subPipeline: string;
   notes: string;
   tags: string;
 }
@@ -45,7 +45,7 @@ const EMPTY: LeadForm = {
   moveInDate: "", numberOfPeople: "1", accommodationType: "", budgetMin: "", budgetMax: "", preferredLocation: "",
   occupation: "", company: "", gender: "", ageGroup: "",
   source: "", assignedTo: "", zone: "", priority: "Medium",
-  stage: "New", notes: "", tags: "",
+  stage: "New", inBlr: "", subPipeline: "", notes: "", tags: "",
 };
 
 const TABS = ["Basic", "Requirements", "Profile", "Source", "Qualify"] as const;
@@ -57,22 +57,17 @@ const STAGES = ["New", "Contacted", "Visit Scheduled", "Visited", "Negotiation",
 const GENDERS = ["Male", "Female", "Any"];
 const AGE_GROUPS = ["18-22", "22-26", "26-30", "30+"];
 const PRIORITIES = ["Low", "Medium", "High"];
+const SUB_PIPELINES = ["Student", "Working Professional", "Family", "Corporate", "Other"];
 
 // ─── AI Text Parser ───────────────────────────────────────────────────────────
 
 function parseLeadText(raw: string): Partial<LeadForm> {
   const result: Partial<LeadForm> = {};
-
-  // Phone: 10-digit number
   const phoneMatch = raw.match(/(?:\+91[-\s]?)?([6-9]\d{9})/);
   if (phoneMatch) result.phone = phoneMatch[1];
-
-  // Name: first capitalized words before phone
   const beforePhone = raw.split(/[6-9]\d{9}/)[0];
   const nameMatch = beforePhone.match(/([A-Z][a-z]+(?: [A-Z][a-z]+)*)/);
   if (nameMatch) result.name = nameMatch[1].trim();
-
-  // Budget: ₹8,000-12,000 or 8k-12k or 8000 to 12000
   const budgetMatch = raw.match(/[₹Rs.]?\s*(\d[\d,]*)\s*[-–to]+\s*(\d[\d,k]*)/i);
   if (budgetMatch) {
     result.budgetMin = budgetMatch[1].replace(/,/g, "").replace(/k/i, "000");
@@ -81,28 +76,21 @@ function parseLeadText(raw: string): Partial<LeadForm> {
     const singleBudget = raw.match(/(?:budget|rent)[:\s]+[₹Rs.]?\s*(\d[\d,k]+)/i);
     if (singleBudget) result.budgetMin = singleBudget[1].replace(/,/g, "").replace(/k/i, "000");
   }
-
-  // Location: after "in", "near", "at", "location"
   const locMatch = raw.match(/(?:in|near|at|location|area)[:\s]+([A-Za-z\s,]+?)(?:\.|,|\n|budget|for|₹|$)/i);
   if (locMatch) result.preferredLocation = locMatch[1].trim();
-
-  // Accommodation type
   for (const t of ACCOMMODATION_TYPES) {
     if (raw.toLowerCase().includes(t.toLowerCase())) { result.accommodationType = t; break; }
   }
-
-  // Number of people
   const peopleMatch = raw.match(/(\d+)\s*(?:people|person|persons|boys|girls|bed)/i);
   if (peopleMatch) result.numberOfPeople = peopleMatch[1];
-
-  // Source hints
   if (/whatsapp/i.test(raw)) result.source = "WhatsApp";
   else if (/referral|referred/i.test(raw)) result.source = "Referral";
-
+  if (/student/i.test(raw)) result.subPipeline = "Student";
+  else if (/working|professional|employee/i.test(raw)) result.subPipeline = "Working Professional";
   return result;
 }
 
-// ─── Tab components ───────────────────────────────────────────────────────────
+// ─── Tab styles ───────────────────────────────────────────────────────────────
 
 const inputCls = "h-9 text-sm border-slate-200 rounded-xl focus-visible:ring-indigo-500";
 const labelCls = "text-xs font-medium text-slate-500 mb-1 block";
@@ -134,36 +122,19 @@ function BasicTab({ form, set }: { form: LeadForm; set: (f: string, v: string) =
   );
 }
 
-// REPLACE the entire RequirementsTab function in src/components/AddLeadDialog.tsx
-
 function RequirementsTab({ form, set }: { form: LeadForm; set: (f: string, v: string) => void }) {
   return (
     <div className="space-y-4">
-      {/* Row 1: Move-in Date + No. of People */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className={labelCls}>Move-in Date</Label>
-          <Input
-            className={inputCls}
-            type="date"
-            value={form.moveInDate}
-            onChange={e => set("moveInDate", e.target.value)}
-          />
+          <Input className={inputCls} type="date" value={form.moveInDate} onChange={e => set("moveInDate", e.target.value)} />
         </div>
         <div>
           <Label className={labelCls}>No. of People</Label>
-          <Input
-            className={inputCls}
-            type="number"
-            min="1"
-            max="10"
-            value={form.numberOfPeople}
-            onChange={e => set("numberOfPeople", e.target.value)}
-          />
+          <Input className={inputCls} type="number" min="1" max="10" value={form.numberOfPeople} onChange={e => set("numberOfPeople", e.target.value)} />
         </div>
       </div>
-
-      {/* Row 2: Accommodation Type (dropdown) + Budget (single combined field) */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className={labelCls}>Accommodation Type</Label>
@@ -173,9 +144,7 @@ function RequirementsTab({ form, set }: { form: LeadForm; set: (f: string, v: st
             className="h-9 w-full text-sm border border-slate-200 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700"
           >
             <option value="">Select type</option>
-            {ACCOMMODATION_TYPES.map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
+            {ACCOMMODATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div>
@@ -200,16 +169,9 @@ function RequirementsTab({ form, set }: { form: LeadForm; set: (f: string, v: st
           </select>
         </div>
       </div>
-
-      {/* Row 3: Preferred Location (full width) */}
       <div>
         <Label className={labelCls}>Preferred Location</Label>
-        <Input
-          className={inputCls}
-          placeholder="Koramangala, HSR Layout..."
-          value={form.preferredLocation}
-          onChange={e => set("preferredLocation", e.target.value)}
-        />
+        <Input className={inputCls} placeholder="Koramangala, HSR Layout..." value={form.preferredLocation} onChange={e => set("preferredLocation", e.target.value)} />
       </div>
     </div>
   );
@@ -233,9 +195,7 @@ function ProfileTab({ form, set }: { form: LeadForm; set: (f: string, v: string)
         <div className="flex gap-2 mt-1">
           {GENDERS.map(g => (
             <button type="button" key={g} onClick={() => set("gender", form.gender === g ? "" : g)}
-              className={`flex-1 py-2 rounded-xl border text-xs font-medium transition-all ${
-                form.gender === g ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
-              }`}
+              className={`flex-1 py-2 rounded-xl border text-xs font-medium transition-all ${form.gender === g ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
             >{g}</button>
           ))}
         </div>
@@ -245,9 +205,7 @@ function ProfileTab({ form, set }: { form: LeadForm; set: (f: string, v: string)
         <div className="flex gap-2 mt-1">
           {AGE_GROUPS.map(a => (
             <button type="button" key={a} onClick={() => set("ageGroup", form.ageGroup === a ? "" : a)}
-              className={`flex-1 py-2 rounded-xl border text-xs font-medium transition-all ${
-                form.ageGroup === a ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
-              }`}
+              className={`flex-1 py-2 rounded-xl border text-xs font-medium transition-all ${form.ageGroup === a ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
             >{a}</button>
           ))}
         </div>
@@ -264,9 +222,7 @@ function SourceTab({ form, set }: { form: LeadForm; set: (f: string, v: string) 
         <div className="grid grid-cols-3 gap-2 mt-1">
           {SOURCES.map(s => (
             <button type="button" key={s} onClick={() => set("source", form.source === s ? "" : s)}
-              className={`py-2 rounded-xl border text-xs font-medium transition-all ${
-                form.source === s ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
-              }`}
+              className={`py-2 rounded-xl border text-xs font-medium transition-all ${form.source === s ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
             >{s}</button>
           ))}
         </div>
@@ -304,6 +260,45 @@ function SourceTab({ form, set }: { form: LeadForm; set: (f: string, v: string) 
 function QualifyTab({ form, set }: { form: LeadForm; set: (f: string, v: string) => void }) {
   return (
     <div className="space-y-4">
+
+      {/* INBLR / NOBLR */}
+      <div>
+        <Label className={labelCls}>Location Type</Label>
+        <div className="flex gap-2 mt-1">
+          {["INBLR", "NOBLR"].map(v => (
+            <button type="button" key={v} onClick={() => set("inBlr", form.inBlr === v ? "" : v)}
+              className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                form.inBlr === v
+                  ? v === "INBLR"
+                    ? "bg-emerald-50 border-emerald-400 text-emerald-700"
+                    : "bg-orange-50 border-orange-400 text-orange-700"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              {v === "INBLR" ? "🏙 INBLR" : "🛣 NOBLR"}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-slate-400 mt-1">
+          {form.inBlr === "INBLR" ? "Inside Bangalore" : form.inBlr === "NOBLR" ? "Outside / Not in Bangalore" : "Select if lead is inside or outside Bangalore"}
+        </p>
+      </div>
+
+      {/* Sub-Pipeline */}
+      <div>
+        <Label className={labelCls}>Sub-Pipeline</Label>
+        <div className="grid grid-cols-3 gap-2 mt-1">
+          {SUB_PIPELINES.map(s => (
+            <button type="button" key={s} onClick={() => set("subPipeline", form.subPipeline === s ? "" : s)}
+              className={`py-2 rounded-xl border text-xs font-medium transition-all ${
+                form.subPipeline === s ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >{s}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Initial Stage */}
       <div>
         <Label className={labelCls}>Initial Stage</Label>
         <div className="grid grid-cols-3 gap-2 mt-1">
@@ -316,10 +311,14 @@ function QualifyTab({ form, set }: { form: LeadForm; set: (f: string, v: string)
           ))}
         </div>
       </div>
+
+      {/* Tags */}
       <div>
         <Label className={labelCls}>Tags <span className="text-slate-400 font-normal">(comma-separated)</span></Label>
         <Input className={inputCls} placeholder="investor, urgent, student" value={form.tags} onChange={e => set("tags", e.target.value)} />
       </div>
+
+      {/* Notes */}
       <div>
         <Label className={labelCls}>Notes</Label>
         <Textarea
@@ -341,12 +340,12 @@ interface AddLeadDialogProps {
 }
 
 const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
-  const [open, setOpen]       = useState(false);
-  const [tab, setTab]         = useState<Tab>("Basic");
-  const [form, setForm]       = useState<LeadForm>({ ...EMPTY });
+  const [open, setOpen]           = useState(false);
+  const [tab, setTab]             = useState<Tab>("Basic");
+  const [form, setForm]           = useState<LeadForm>({ ...EMPTY });
   const [pasteText, setPasteText] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
 
   function set(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -384,21 +383,23 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
         zone:        form.zone || undefined,
         priority:    form.priority,
         stage:       form.stage,
+        inBlr:       form.inBlr || undefined,
+        subPipeline: form.subPipeline || undefined,
         budget:      budgetStr,
         preferredLocality: form.preferredLocation || undefined,
         notes: [
           form.notes,
-          form.occupation ? `Occupation: ${form.occupation}` : "",
-          form.company    ? `Company/College: ${form.company}` : "",
-          form.gender     ? `Gender: ${form.gender}` : "",
-          form.ageGroup   ? `Age: ${form.ageGroup}` : "",
-          form.moveInDate ? `Move-in: ${form.moveInDate}` : "",
+          form.occupation      ? `Occupation: ${form.occupation}` : "",
+          form.company         ? `Company/College: ${form.company}` : "",
+          form.gender          ? `Gender: ${form.gender}` : "",
+          form.ageGroup        ? `Age: ${form.ageGroup}` : "",
+          form.moveInDate      ? `Move-in: ${form.moveInDate}` : "",
           form.numberOfPeople !== "1" ? `People: ${form.numberOfPeople}` : "",
           form.accommodationType ? `Accommodation: ${form.accommodationType}` : "",
         ].filter(Boolean).join("\n") || undefined,
-        tags:         form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
-        initialNote:  `Lead created via Add Lead form. Source: ${form.source}`,
-        createdBy:    "Admin",
+        tags:        form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+        initialNote: `Lead created via Add Lead form. Source: ${form.source}`,
+        createdBy:   "Admin",
       };
 
       const res = await fetch("/api/leads", {
@@ -456,23 +457,17 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
               <div className="flex justify-end mt-1.5">
                 <button type="button" onClick={handleParse}
                   className="text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-lg transition-all"
-                >
-                  Auto-fill fields →
-                </button>
+                >Auto-fill fields →</button>
               </div>
             )}
           </div>
 
           {/* Tab bar */}
           <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5 mb-4">
-            {TABS.map((t, i) => (
+            {TABS.map((t) => (
               <button key={t} type="button" onClick={() => setTab(t)}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {t}
-              </button>
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >{t}</button>
             ))}
           </div>
         </div>
@@ -493,7 +488,7 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between mt-2">
           <div className="flex gap-1">
-            {TABS.map((t, i) => (
+            {TABS.map((t) => (
               <div key={t} className={`w-1.5 h-1.5 rounded-full transition-all ${tab === t ? "bg-indigo-500 w-4" : "bg-slate-200"}`} />
             ))}
           </div>
@@ -502,9 +497,7 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
               <Button type="button" variant="outline" size="sm" onClick={() => setTab(TABS[tabIndex - 1])}>← Back</Button>
             )}
             {tabIndex < TABS.length - 1 ? (
-              <Button type="button" size="sm" onClick={() => setTab(TABS[tabIndex + 1])} className="bg-indigo-600 hover:bg-indigo-700">
-                Next →
-              </Button>
+              <Button type="button" size="sm" onClick={() => setTab(TABS[tabIndex + 1])} className="bg-indigo-600 hover:bg-indigo-700">Next →</Button>
             ) : (
               <Button type="button" size="sm" onClick={submit} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">
                 {loading ? "Creating…" : "Create Lead ✓"}

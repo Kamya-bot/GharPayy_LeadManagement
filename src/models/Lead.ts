@@ -22,7 +22,7 @@ export interface IActivity {
   createdAt: Date;
 }
 
-// ─── Lead ─────────────────────────────────────────────────────────────────────
+// ─── Lead ────────────────────────────────────────────────────────────────────
 
 export type LeadStage =
   | "New"
@@ -64,6 +64,13 @@ export type PropertyType =
   | "Plot"
   | "Commercial";
 
+export type SubPipeline =
+  | "Student"
+  | "Working Professional"
+  | "Family"
+  | "Corporate"
+  | "Other";
+
 export interface ILead extends Document {
   // Core identity
   name: string;
@@ -78,6 +85,10 @@ export interface ILead extends Document {
   zone?: string;
   priority: "Low" | "Medium" | "High";
   tags: string[];
+
+  // Location classification
+  inBlr?: "INBLR" | "NOBLR";         // Inside Bangalore or Not
+  subPipeline?: SubPipeline;          // Student / Working Professional / etc.
 
   // Property preference
   propertyType?: PropertyType;
@@ -105,14 +116,8 @@ const ActivitySchema = new Schema<IActivity>(
     type: {
       type: String,
       enum: [
-        "stage_change",
-        "note",
-        "call",
-        "visit_scheduled",
-        "visit_done",
-        "document",
-        "whatsapp",
-        "email",
+        "stage_change", "note", "call", "visit_scheduled",
+        "visit_done", "document", "whatsapp", "email",
       ],
       required: true,
     },
@@ -126,49 +131,43 @@ const ActivitySchema = new Schema<IActivity>(
 
 const LeadSchema = new Schema<ILead>(
   {
-    name: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true },
-    email: { type: String, trim: true, lowercase: true },
+    name:     { type: String, required: true, trim: true },
+    phone:    { type: String, required: true, trim: true },
+    email:    { type: String, trim: true, lowercase: true },
     whatsapp: { type: String, trim: true },
 
     source: {
       type: String,
       enum: [
-        "Website",
-        "WhatsApp",
-        "Referral",
-        "Walk-in",
-        "Housing.com",
-        "99acres",
-        "MagicBricks",
-        "Facebook",
-        "Instagram",
-        "Cold Call",
-        "Other",
+        "Website", "WhatsApp", "Referral", "Walk-in",
+        "Housing.com", "99acres", "MagicBricks",
+        "Facebook", "Instagram", "Cold Call", "Other",
       ],
       required: true,
     },
     stage: {
       type: String,
-      enum: [
-        "New",
-        "Contacted",
-        "Visit Scheduled",
-        "Visited",
-        "Negotiation",
-        "Booked",
-        "Lost",
-      ],
+      enum: ["New", "Contacted", "Visit Scheduled", "Visited", "Negotiation", "Booked", "Lost"],
       default: "New",
     },
     assignedTo: { type: String, required: true },
-    zone: String,
+    zone:       String,
     priority: {
       type: String,
       enum: ["Low", "Medium", "High"],
       default: "Medium",
     },
     tags: [String],
+
+    // New fields
+    inBlr: {
+      type: String,
+      enum: ["INBLR", "NOBLR"],
+    },
+    subPipeline: {
+      type: String,
+      enum: ["Student", "Working Professional", "Family", "Corporate", "Other"],
+    },
 
     propertyType: {
       type: String,
@@ -177,12 +176,8 @@ const LeadSchema = new Schema<ILead>(
     budget: {
       type: String,
       enum: [
-        "Under ₹5L",
-        "₹5L–₹10L",
-        "₹10L–₹20L",
-        "₹20L–₹30L",
-        "₹30L–₹50L",
-        "Above ₹50L",
+        "Under ₹5L", "₹5L–₹10L", "₹10L–₹20L",
+        "₹20L–₹30L", "₹30L–₹50L", "Above ₹50L",
       ],
     },
     preferredLocality: String,
@@ -191,19 +186,20 @@ const LeadSchema = new Schema<ILead>(
       enum: ["Ready to Move", "Under Construction", "Any"],
     },
 
-    notes: String,
-    activities: [ActivitySchema],
+    notes:           String,
+    activities:      [ActivitySchema],
     lastContactedAt: Date,
-    nextFollowUpAt: Date,
+    nextFollowUpAt:  Date,
   },
   { timestamps: true }
 );
 
-// Indexes for fast queries
 LeadSchema.index({ phone: 1 });
 LeadSchema.index({ stage: 1 });
 LeadSchema.index({ assignedTo: 1 });
 LeadSchema.index({ zone: 1 });
+LeadSchema.index({ inBlr: 1 });
+LeadSchema.index({ subPipeline: 1 });
 LeadSchema.index({ createdAt: -1 });
 
 const Lead: Model<ILead> =
