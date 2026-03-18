@@ -5,20 +5,27 @@ interface AuthUser {
   email: string;
   fullName: string;
   role: string;
+  identity?: string;
+  zone?: string | null;
+  zoneId?: string | null;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
+  isAdmin: boolean;
+  isZoneAdmin: boolean;
   signOut: () => Promise<void>;
   checkUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
-  loading: true, 
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  isAdmin: false,
+  isZoneAdmin: false,
   signOut: async () => {},
-  checkUser: async () => {}
+  checkUser: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -33,15 +40,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await res.json();
       if (data.user) {
         setUser({
-          id: data.user._id,
+          id: data.user._id || data.user.id,
           email: data.user.email,
           fullName: data.user.fullName,
-          role: data.user.role
+          role: data.user.role,
+          identity: data.user.identity || null,
+          zone: data.user.zone || null,
+          zoneId: data.user.zoneId || null,
         });
       } else {
         setUser(null);
       }
-    } catch (error) {
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);
@@ -57,15 +67,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await fetch('/api/auth/logout', { method: 'POST' });
       setUser(null);
       window.location.href = '/auth';
-    } catch (error) {
-      console.error('Logout failed', error);
+    } catch {
+      console.error('Logout failed');
     }
   };
 
+  const isAdmin = user?.role === 'admin';
+  const isZoneAdmin = user?.role === 'zone_admin';
+
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, checkUser }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, isZoneAdmin, signOut, checkUser }}>
       {children}
     </AuthContext.Provider>
   );
 };
-
