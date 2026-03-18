@@ -1,5 +1,6 @@
 "use client";
 
+import TeamMembers from '@/components/TeamMembers';
 import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useZones, useCreateZone, useTeamQueues, useCreateTeamQueue, useEscalations, useUpdateEscalation } from '@/hooks/useZones';
@@ -10,9 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Map, Plus, Users, AlertTriangle, CheckCircle, Clock, Shield } from 'lucide-react';
+import { Map, Plus, Users, AlertTriangle, CheckCircle, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -69,12 +69,16 @@ const ZoneManagement = () => {
     );
   }
 
+  // Shape zones for TeamMembers component
+  const shapedZones = (zones || []).map((z: any) => ({ id: z.id, name: z.name }));
+
   return (
     <AppLayout title="Zone Management" subtitle="Geographic routing, team queues & escalations">
       <Tabs defaultValue="zones">
         <TabsList className="mb-6">
           <TabsTrigger value="zones" className="text-xs gap-1.5"><Map size={12} /> Zones</TabsTrigger>
           <TabsTrigger value="queues" className="text-xs gap-1.5"><Users size={12} /> Team Queues</TabsTrigger>
+          <TabsTrigger value="team" className="text-xs gap-1.5"><Users size={12} /> Team</TabsTrigger>
           <TabsTrigger value="escalations" className="text-xs gap-1.5">
             <AlertTriangle size={12} /> Escalations
             {(escalations?.length || 0) > 0 && (
@@ -195,6 +199,11 @@ const ZoneManagement = () => {
               </tbody>
             </table>
           </div>
+        </TabsContent>
+
+        {/* TEAM TAB */}
+        <TabsContent value="team">
+          <TeamMembers zones={shapedZones} />
         </TabsContent>
 
         {/* ESCALATIONS TAB */}
