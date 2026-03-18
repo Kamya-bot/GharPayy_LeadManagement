@@ -3,14 +3,14 @@ import dbConnect from "@/lib/mongodb";
 import Visit from "@/models/Visit";
 import Lead from "@/models/Lead";
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 // PATCH /api/visits/[id]
 export async function PATCH(req: NextRequest, { params }: Params) {
   await dbConnect();
-
+  const { id } = await params;
   const body = await req.json();
-  const visit = await Visit.findById(params.id);
+  const visit = await Visit.findById(id);
   if (!visit) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Confirm visit
@@ -21,15 +21,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // Record outcome
   if (body.outcome) {
     visit.outcome = body.outcome;
-
-    // Auto-update lead stage based on outcome
     const stageMap: Record<string, string> = {
-      booked:          "Booked",
-      considering:     "Negotiation",
-      not_interested:  "Lost",
+      booked:         "Booked",
+      considering:    "Negotiation",
+      not_interested: "Lost",
     };
     const newStage = stageMap[body.outcome];
-
     if (newStage) {
       await Lead.findByIdAndUpdate(visit.leadId, {
         stage: newStage,
@@ -47,7 +44,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   if (body.notes !== undefined) visit.notes = body.notes;
-
   await visit.save();
 
   const shaped = {
@@ -57,14 +53,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     properties: { name: visit.propertyName },
     agents:     { name: visit.agentName },
   };
-
   return NextResponse.json(shaped);
 }
 
 // GET /api/visits/[id]
 export async function GET(_req: NextRequest, { params }: Params) {
   await dbConnect();
-  const visit = await Visit.findById(params.id).lean();
+  const { id } = await params;
+  const visit = await Visit.findById(id).lean();
   if (!visit) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ...visit, id: visit._id.toString() });
 }

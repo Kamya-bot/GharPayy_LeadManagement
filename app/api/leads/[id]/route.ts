@@ -2,29 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import Lead from "@/models/Lead";
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
-// ─── GET /api/leads/[id] ───────────────────────────────────────────────────
+// GET /api/leads/[id]
 export async function GET(_req: NextRequest, { params }: Params) {
   await dbConnect();
-  const lead = await Lead.findById(params.id).lean();
+  const { id } = await params;
+  const lead = await Lead.findById(id).lean();
   if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ lead });
 }
 
-// ─── PATCH /api/leads/[id] ─────────────────────────────────────────────────
-// Supports:
-//   - General field updates
-//   - Stage change  → body: { stage, performedBy, note? }
-//   - Add activity  → body: { addActivity: { type, note, performedBy } }
+// PATCH /api/leads/[id]
 export async function PATCH(req: NextRequest, { params }: Params) {
   await dbConnect();
-
+  const { id } = await params;
   const body = await req.json();
-  const lead = await Lead.findById(params.id);
+  const lead = await Lead.findById(id);
   if (!lead) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // ── Stage change ──────────────────────────────────────────────────────────
+  // Stage change
   if (body.stage && body.stage !== lead.stage) {
     const activity = {
       type: "stage_change" as const,
@@ -38,40 +35,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     lead.stage = body.stage;
   }
 
-  // ── Add standalone activity ───────────────────────────────────────────────
+  // Add standalone activity
   if (body.addActivity) {
-    lead.activities.push({
-      ...body.addActivity,
-      createdAt: new Date(),
-    });
+    lead.activities.push({ ...body.addActivity, createdAt: new Date() });
     if (body.addActivity.type === "call") {
       lead.lastContactedAt = new Date();
     }
   }
 
-  // ── General updates ───────────────────────────────────────────────────────
+  // General updates
   const allowedFields = [
-    "name",
-    "phone",
-    "email",
-    "whatsapp",
-    "source",
-    "assignedTo",
-    "zone",
-    "priority",
-    "tags",
-    "propertyType",
-    "budget",
-    "preferredLocality",
-    "possession",
-    "notes",
-    "nextFollowUpAt",
-    "lastContactedAt",
+    "name", "phone", "email", "whatsapp", "source", "assignedTo",
+    "zone", "priority", "tags", "propertyType", "budget",
+    "preferredLocality", "possession", "notes", "nextFollowUpAt", "lastContactedAt",
   ];
-
   for (const key of allowedFields) {
     if (key in body) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (lead as any)[key] = body[key];
     }
   }
@@ -80,9 +59,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   return NextResponse.json({ lead });
 }
 
-// ─── DELETE /api/leads/[id] ────────────────────────────────────────────────
+// DELETE /api/leads/[id]
 export async function DELETE(_req: NextRequest, { params }: Params) {
   await dbConnect();
-  await Lead.findByIdAndDelete(params.id);
+  const { id } = await params;
+  await Lead.findByIdAndDelete(id);
   return NextResponse.json({ success: true });
 }
