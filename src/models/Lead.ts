@@ -1,7 +1,5 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
-// ─── Activity ────────────────────────────────────────────────────────────────
-
 export type ActivityType =
   | "stage_change"
   | "note"
@@ -10,7 +8,8 @@ export type ActivityType =
   | "visit_done"
   | "document"
   | "whatsapp"
-  | "email";
+  | "email"
+  | "zone_transfer";
 
 export interface IActivity {
   _id?: mongoose.Types.ObjectId;
@@ -18,11 +17,11 @@ export interface IActivity {
   note: string;
   fromStage?: string;
   toStage?: string;
+  fromZone?: string;
+  toZone?: string;
   performedBy: string;
   createdAt: Date;
 }
-
-// ─── Lead ────────────────────────────────────────────────────────────────────
 
 export type LeadStage =
   | "New"
@@ -71,14 +70,14 @@ export type SubPipeline =
   | "Corporate"
   | "Other";
 
+export type LeadTemperature = "Hot" | "Warm" | "Cold";
+
 export interface ILead extends Document {
-  // Core identity
   name: string;
   phone: string;
   email?: string;
   whatsapp?: string;
 
-  // Lead metadata
   source: LeadSource;
   stage: LeadStage;
   assignedTo: string;
@@ -86,30 +85,27 @@ export interface ILead extends Document {
   priority: "Low" | "Medium" | "High";
   tags: string[];
 
-  // Location classification
-  inBlr?: "INBLR" | "NOBLR";         // Inside Bangalore or Not
-  subPipeline?: SubPipeline;          // Student / Working Professional / etc.
+  inBlr?: "INBLR" | "NOBLR";
+  subPipeline?: SubPipeline;
 
-  // Property preference
   propertyType?: PropertyType;
   budget?: BudgetRange;
   preferredLocality?: string;
   possession?: "Ready to Move" | "Under Construction" | "Any";
 
-  // Internal notes
   notes?: string;
-
-  // Activity log
   activities: IActivity[];
 
-  // Timestamps
+  // New fields
+  leadScore?: number;           // 0–10
+  temperature?: LeadTemperature; // Hot / Warm / Cold
+  agingDays?: number;           // Days since last contact
+
   createdAt: Date;
   updatedAt: Date;
   lastContactedAt?: Date;
   nextFollowUpAt?: Date;
 }
-
-// ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const ActivitySchema = new Schema<IActivity>(
   {
@@ -117,13 +113,15 @@ const ActivitySchema = new Schema<IActivity>(
       type: String,
       enum: [
         "stage_change", "note", "call", "visit_scheduled",
-        "visit_done", "document", "whatsapp", "email",
+        "visit_done", "document", "whatsapp", "email", "zone_transfer",
       ],
       required: true,
     },
-    note: { type: String, required: true },
-    fromStage: String,
-    toStage: String,
+    note:        { type: String, required: true },
+    fromStage:   String,
+    toStage:     String,
+    fromZone:    String,
+    toZone:      String,
     performedBy: { type: String, required: true },
   },
   { timestamps: true }
@@ -159,7 +157,6 @@ const LeadSchema = new Schema<ILead>(
     },
     tags: [String],
 
-    // New fields
     inBlr: {
       type: String,
       enum: ["INBLR", "NOBLR"],
@@ -186,8 +183,14 @@ const LeadSchema = new Schema<ILead>(
       enum: ["Ready to Move", "Under Construction", "Any"],
     },
 
-    notes:           String,
-    activities:      [ActivitySchema],
+    notes:      String,
+    activities: [ActivitySchema],
+
+    // New fields
+    leadScore:   { type: Number, min: 0, max: 10, default: 0 },
+    temperature: { type: String, enum: ["Hot", "Warm", "Cold"], default: "Cold" },
+    agingDays:   { type: Number, default: 0 },
+
     lastContactedAt: Date,
     nextFollowUpAt:  Date,
   },
@@ -201,6 +204,8 @@ LeadSchema.index({ zone: 1 });
 LeadSchema.index({ inBlr: 1 });
 LeadSchema.index({ subPipeline: 1 });
 LeadSchema.index({ createdAt: -1 });
+LeadSchema.index({ leadScore: -1 });
+LeadSchema.index({ temperature: 1 });
 
 const Lead: Model<ILead> =
   mongoose.models.Lead || mongoose.model<ILead>("Lead", LeadSchema);
