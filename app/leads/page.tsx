@@ -1,6 +1,7 @@
 "use client";
 
 import AddLeadDialog from "@/components/AddLeadDialog";
+import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -50,13 +51,13 @@ const STAGES: LeadStage[] = [
 ];
 
 const STAGE_CONFIG: Record<LeadStage, { color: string; bg: string; dot: string }> = {
-  New:               { color: "text-sky-700",     bg: "bg-sky-50 border-sky-200",       dot: "bg-sky-400" },
-  Contacted:         { color: "text-violet-700",  bg: "bg-violet-50 border-violet-200", dot: "bg-violet-400" },
-  "Visit Scheduled": { color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",   dot: "bg-amber-400" },
-  Visited:           { color: "text-orange-700",  bg: "bg-orange-50 border-orange-200", dot: "bg-orange-400" },
-  Negotiation:       { color: "text-indigo-700",  bg: "bg-indigo-50 border-indigo-200", dot: "bg-indigo-400" },
+  New:               { color: "text-sky-700",     bg: "bg-sky-50 border-sky-200",         dot: "bg-sky-400" },
+  Contacted:         { color: "text-violet-700",  bg: "bg-violet-50 border-violet-200",   dot: "bg-violet-400" },
+  "Visit Scheduled": { color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",     dot: "bg-amber-400" },
+  Visited:           { color: "text-orange-700",  bg: "bg-orange-50 border-orange-200",   dot: "bg-orange-400" },
+  Negotiation:       { color: "text-indigo-700",  bg: "bg-indigo-50 border-indigo-200",   dot: "bg-indigo-400" },
   Booked:            { color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" },
-  Lost:              { color: "text-rose-700",    bg: "bg-rose-50 border-rose-200",     dot: "bg-rose-400" },
+  Lost:              { color: "text-rose-700",    bg: "bg-rose-50 border-rose-200",       dot: "bg-rose-400" },
 };
 
 const ACTIVITY_ICONS: Record<ActivityType, string> = {
@@ -254,6 +255,7 @@ function LeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
 }
 
 export default function LeadsPage() {
+  const { user } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -267,11 +269,15 @@ export default function LeadsPage() {
       const params = new URLSearchParams({ limit: "200" });
       if (search) params.set("search", search);
       if (stageFilter !== "All") params.set("stage", stageFilter);
+      // Zone members only see their zone's leads
+      if (user?.zone && user?.role !== "admin") {
+        params.set("zone", user.zone);
+      }
       const res = await fetch(`/api/leads?${params}`);
       const data = await res.json();
       setLeads(data.leads || []);
     } finally { setLoading(false); }
-  }, [search, stageFilter]);
+  }, [search, stageFilter, user]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -302,6 +308,18 @@ export default function LeadsPage() {
         </div>
         <AddLeadDialog onCreated={onLeadCreated} />
       </div>
+
+      {/* Zone banner for non-admin users */}
+      {user?.zone && user?.role !== "admin" && (
+        <div className="px-6 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
+          <span className="text-xs font-medium text-indigo-700">
+            📍 Viewing: {user.zone} zone leads
+          </span>
+          <span className="text-xs text-indigo-400">
+            ({user.identity} · {user.zone})
+          </span>
+        </div>
+      )}
 
       <div className="px-6 py-3 bg-white border-b border-slate-100 flex items-center gap-2 overflow-x-auto">
         <button onClick={() => setStageFilter("All")}

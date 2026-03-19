@@ -6,8 +6,8 @@ import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'gharpayy@123';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin!123admin@123admin';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin@gharpayy.in';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 export async function POST(req: Request) {
   try {
