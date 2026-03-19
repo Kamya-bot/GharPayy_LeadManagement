@@ -29,14 +29,17 @@ const container = {
 
 const Dashboard = () => {
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
-  const { data: leads, isLoading: leadsLoading } = useLeads();
+  const { data: leadsRaw, isLoading: leadsLoading } = useLeads();
   const { data: agentStats } = useAgentStats();
   const { data: bookingStats } = useBookingStats();
-  const { data: reminders } = useAllReminders();
+  const { data: remindersRaw } = useAllReminders();
   const completeFollowUp = useCompleteFollowUp();
   const qc = useQueryClient();
 
-  // Realtime subscription removed - will be replaced with polling or typical SWR later
+  // Safely ensure leads and reminders are always arrays
+  const leads = Array.isArray(leadsRaw) ? leadsRaw : [];
+  const reminders = Array.isArray(remindersRaw) ? remindersRaw : [];
+
   useEffect(() => {
     // MongoDB doesn't have native realtime like Supabase (without Change Streams + Websockets).
     // For now, we will rely on manual invalidation or react-query polling.
@@ -44,10 +47,10 @@ const Dashboard = () => {
 
   const pipelineData = PIPELINE_STAGES.map(stage => ({
     name: stage.label.split(' ')[0],
-    count: leads?.filter(l => l.status === stage.key).length || 0,
+    count: leads.filter(l => l.status === stage.key).length,
   }));
 
-  const sourceData = leads
+  const sourceData = leads.length > 0
     ? Object.entries(
         leads.reduce((acc, l) => {
           acc[l.source] = (acc[l.source] || 0) + 1;
@@ -56,9 +59,9 @@ const Dashboard = () => {
       ).map(([key, value]) => ({ name: SOURCE_LABELS[key as keyof typeof SOURCE_LABELS] || key, value }))
     : [];
 
-  const newLeads = leads?.filter(l => l.status === 'new') || [];
-  const hotLeads = leads?.filter(l => ((l as any).lead_score ?? 0) >= 70).slice(0, 5) || [];
-  const overdueReminders = reminders?.filter(r => isPast(new Date(r.reminder_date))) || [];
+  const newLeads = leads.filter(l => l.status === 'new');
+  const hotLeads = leads.filter(l => ((l as any).lead_score ?? 0) >= 70).slice(0, 5);
+  const overdueReminders = reminders.filter(r => isPast(new Date(r.reminder_date)));
 
   const handleComplete = async (id: string) => {
     try {
@@ -204,10 +207,10 @@ const Dashboard = () => {
         <div className="kpi-card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold text-xs text-foreground">Follow-ups</h3>
-            <span className="text-2xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{reminders?.length || 0} pending</span>
+            <span className="text-2xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{reminders.length} pending</span>
           </div>
           <div className="space-y-2">
-            {(reminders || []).slice(0, 5).map(r => (
+            {reminders.slice(0, 5).map(r => (
               <div key={r.id} className={`flex items-center justify-between p-3 rounded-xl ${isPast(new Date(r.reminder_date)) ? 'bg-destructive/5 border border-destructive/15' : 'bg-secondary/50'}`}>
                 <div>
                   <p className="text-xs font-medium text-foreground">{(r as any).leads?.name}</p>
@@ -221,7 +224,7 @@ const Dashboard = () => {
                 </Button>
               </div>
             ))}
-            {(reminders?.length || 0) === 0 && <p className="text-2xs text-muted-foreground text-center py-6">No pending follow-ups</p>}
+            {reminders.length === 0 && <p className="text-2xs text-muted-foreground text-center py-6">No pending follow-ups</p>}
           </div>
         </div>
       </div>
@@ -230,7 +233,7 @@ const Dashboard = () => {
       <div className="kpi-card mt-6">
         <h3 className="font-display font-semibold text-xs text-foreground mb-4">Agent Performance</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-          {(agentStats || []).map(agent => (
+          {(Array.isArray(agentStats) ? agentStats : []).map(agent => (
             <div key={agent.id} className="flex items-center gap-3 p-3.5 rounded-xl bg-secondary/50">
               <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center">
                 <span className="text-2xs font-bold text-accent">{agent.name.charAt(0)}</span>
