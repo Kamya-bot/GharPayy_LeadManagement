@@ -10,29 +10,24 @@ import { Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 interface LeadForm {
-  // Basic
   name: string;
   phone: string;
   email: string;
   whatsapp: string;
-  // Requirements
   moveInDate: string;
   numberOfPeople: string;
   accommodationType: string;
   budgetMin: string;
   budgetMax: string;
   preferredLocation: string;
-  // Profile
   occupation: string;
   company: string;
   gender: string;
   ageGroup: string;
-  // Source
   source: string;
   assignedTo: string;
   zone: string;
   priority: string;
-  // Qualify
   stage: string;
   inBlr: string;
   subPipeline: string;
@@ -66,11 +61,11 @@ function parseLeadText(raw: string): Partial<LeadForm> {
   const text = raw.trim();
   const lower = text.toLowerCase();
 
-  // ── Phone ────────────────────────────────────────────────────────────────
+  // ── Phone ─────────────────────────────────────────────────────────────────
   const phoneMatch = text.match(/(?:\+91[-.\s]?|91[-.\s]?|0)?([6-9]\d{9})/);
   if (phoneMatch) result.phone = phoneMatch[1];
 
-  // ── Name ─────────────────────────────────────────────────────────────────
+  // ── Name ──────────────────────────────────────────────────────────────────
   const namedMatch = text.match(/(?:name|naam)[:\s]+([A-Za-z]+(?: [A-Za-z]+){0,3})/i);
   if (namedMatch) {
     result.name = namedMatch[1].trim();
@@ -85,34 +80,35 @@ function parseLeadText(raw: string): Partial<LeadForm> {
   if (emailMatch) result.email = emailMatch[0];
 
   // ── Budget ────────────────────────────────────────────────────────────────
-  const budgetRange = text.match(/(?:budget|rent|pay|upto|up to)?[:\s]*[₹Rs.]?\s*(\d+\.?\d*)\s*(k)?\s*[-–to]+\s*[₹Rs.]?\s*(\d+\.?\d*)\s*(k)?/i);
+  const budgetRange = text.match(/(\d+\.?\d*)\s*(k)?\s*[-–to]+\s*(\d+\.?\d*)\s*(k)?/i);
   if (budgetRange) {
-    const toNum = (val: string, k?: string) => String(parseFloat(val) * (k ? 1000 : parseFloat(val) < 500 ? 1000 : 1));
-    result.budgetMin = toNum(budgetRange[1], budgetRange[2]);
-    result.budgetMax = toNum(budgetRange[3], budgetRange[4]);
+    const v1 = parseFloat(budgetRange[1]);
+    const v2 = parseFloat(budgetRange[3]);
+    result.budgetMin = String(budgetRange[2] ? v1 * 1000 : v1 < 500 ? v1 * 1000 : v1);
+    result.budgetMax = String(budgetRange[4] ? v2 * 1000 : v2 < 500 ? v2 * 1000 : v2);
   } else {
     const singleBudget = text.match(/(?:budget|rent|pay|upto)[:\s]*[₹Rs.]?\s*(\d+\.?\d*)\s*(k)?/i);
     if (singleBudget) {
-      const val = parseFloat(singleBudget[1]);
-      const actual = String(singleBudget[2] ? val * 1000 : val < 500 ? val * 1000 : val);
+      const v = parseFloat(singleBudget[1]);
+      const actual = String(singleBudget[2] ? v * 1000 : v < 500 ? v * 1000 : v);
       result.budgetMin = actual;
       result.budgetMax = actual;
     }
   }
 
   // ── Accommodation Type ────────────────────────────────────────────────────
-  if (/\b1\s*sharing\b|single\s*(room|sharing|occupancy)?/i.test(text))       result.accommodationType = "Single";
-  else if (/\b2\s*sharing\b|double\s*(room|sharing|occupancy)?/i.test(text))  result.accommodationType = "Double";
-  else if (/\b3\s*sharing\b|triple\s*(room|sharing|occupancy)?/i.test(text))  result.accommodationType = "Triple";
-  else if (/\b4\s*sharing\b|quad/i.test(text))                                result.accommodationType = "Quad";
-  else if (/private\s*room/i.test(text))                                      result.accommodationType = "Private Room";
-  else if (/flat|apartment|\d\s*bhk/i.test(text))                             result.accommodationType = "Entire Flat";
+  if (/\b1\s*sharing\b|single\s*(room|sharing|occupancy)?/i.test(text))      result.accommodationType = "Single";
+  else if (/\b2\s*sharing\b|double\s*(room|sharing|occupancy)?/i.test(text)) result.accommodationType = "Double";
+  else if (/\b3\s*sharing\b|triple\s*(room|sharing|occupancy)?/i.test(text)) result.accommodationType = "Triple";
+  else if (/\b4\s*sharing\b|quad/i.test(text))                               result.accommodationType = "Quad";
+  else if (/private\s*room/i.test(text))                                     result.accommodationType = "Private Room";
+  else if (/flat|apartment|\d\s*bhk/i.test(text))                            result.accommodationType = "Entire Flat";
 
   // ── Number of People ──────────────────────────────────────────────────────
   const peopleMatch = text.match(/(\d+)\s*(?:people|person|persons|boys|girls|bed|pax|heads)/i);
   if (peopleMatch) result.numberOfPeople = peopleMatch[1];
 
-  // ── Preferred Location (Bangalore areas) ─────────────────────────────────
+  // ── Preferred Location ────────────────────────────────────────────────────
   const blrAreas = [
     "koramangala", "hsr layout", "hsr", "indiranagar", "whitefield",
     "marathahalli", "electronic city", "bellandur", "sarjapur", "btm",
@@ -159,8 +155,8 @@ function parseLeadText(raw: string): Partial<LeadForm> {
   }
 
   // ── Gender ────────────────────────────────────────────────────────────────
-  if (/\bfemale|girl|women|lady|ladies\b/i.test(text))  result.gender = "Female";
-  else if (/\bmale|boy\b/i.test(text))                  result.gender = "Male";
+  if (/\bfemale|girl|women|lady|ladies\b/i.test(text)) result.gender = "Female";
+  else if (/\bmale|boy\b/i.test(text))                 result.gender = "Male";
 
   // ── Occupation & Sub-Pipeline ─────────────────────────────────────────────
   if (/\bstudent|college|university|btech|mtech|mba|bca|mca|degree\b/i.test(text)) {
@@ -168,13 +164,13 @@ function parseLeadText(raw: string): Partial<LeadForm> {
     result.occupation = "Student";
   } else if (/\bworking|professional|employee|job|software|engineer|developer|analyst|manager|consultant\b/i.test(text)) {
     result.subPipeline = "Working Professional";
-    if (/software engineer/i.test(text))      result.occupation = "Software Engineer";
-    else if (/developer/i.test(text))         result.occupation = "Developer";
-    else if (/data analyst/i.test(text))      result.occupation = "Data Analyst";
-    else if (/analyst/i.test(text))           result.occupation = "Analyst";
-    else if (/manager/i.test(text))           result.occupation = "Manager";
-    else if (/consultant/i.test(text))        result.occupation = "Consultant";
-    else                                       result.occupation = "Working Professional";
+    if (/software engineer/i.test(text))  result.occupation = "Software Engineer";
+    else if (/developer/i.test(text))     result.occupation = "Developer";
+    else if (/data analyst/i.test(text))  result.occupation = "Data Analyst";
+    else if (/analyst/i.test(text))       result.occupation = "Analyst";
+    else if (/manager/i.test(text))       result.occupation = "Manager";
+    else if (/consultant/i.test(text))    result.occupation = "Consultant";
+    else                                   result.occupation = "Working Professional";
   } else if (/\bfamily|couple|married\b/i.test(text)) {
     result.subPipeline = "Family";
   } else if (/\bintern\b/i.test(text)) {
@@ -187,18 +183,18 @@ function parseLeadText(raw: string): Partial<LeadForm> {
   if (companyMatch) result.company = companyMatch[1].trim();
 
   // ── Source ────────────────────────────────────────────────────────────────
-  if (/whatsapp/i.test(text))                   result.source = "WhatsApp";
-  else if (/instagram|insta\b/i.test(text))     result.source = "Instagram";
-  else if (/facebook|\bfb\b/i.test(text))       result.source = "Facebook";
+  if (/whatsapp/i.test(text))                       result.source = "WhatsApp";
+  else if (/instagram|insta\b/i.test(text))         result.source = "Instagram";
+  else if (/facebook|\bfb\b/i.test(text))           result.source = "Facebook";
   else if (/referr|referred|reference/i.test(text)) result.source = "Referral";
-  else if (/housing\.com/i.test(text))          result.source = "Housing.com";
-  else if (/99acres/i.test(text))               result.source = "99acres";
-  else if (/magic\s*bricks/i.test(text))        result.source = "MagicBricks";
-  else if (/walk.?in/i.test(text))              result.source = "Walk-in";
-  else if (/website|online/i.test(text))        result.source = "Website";
+  else if (/housing\.com/i.test(text))              result.source = "Housing.com";
+  else if (/99acres/i.test(text))                   result.source = "99acres";
+  else if (/magic\s*bricks/i.test(text))            result.source = "MagicBricks";
+  else if (/walk.?in/i.test(text))                  result.source = "Walk-in";
+  else if (/website|online/i.test(text))            result.source = "Website";
 
   // ── In BLR ────────────────────────────────────────────────────────────────
-  if (/\bin blr|in bangalore|currently in|already in|staying in\b/i.test(text))   result.inBlr = "INBLR";
+  if (/\bin blr|in bangalore|currently in|already in|staying in\b/i.test(text))      result.inBlr = "INBLR";
   else if (/\bnot in|outside|coming from|relocat|moving to bangalore\b/i.test(text)) result.inBlr = "NOBLR";
 
   // ── Notes ─────────────────────────────────────────────────────────────────
