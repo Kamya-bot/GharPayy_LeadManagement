@@ -61,11 +61,9 @@ function parseLeadText(raw: string): Partial<LeadForm> {
   const text = raw.trim();
   const lower = text.toLowerCase();
 
-  // ── Phone ─────────────────────────────────────────────────────────────────
   const phoneMatch = text.match(/(?:\+91[-.\s]?|91[-.\s]?|0)?([6-9]\d{9})/);
   if (phoneMatch) result.phone = phoneMatch[1];
 
-  // ── Name ──────────────────────────────────────────────────────────────────
   const namedMatch = text.match(/(?:name|naam)[:\s]+([A-Za-z]+(?: [A-Za-z]+){0,3})/i);
   if (namedMatch) {
     result.name = namedMatch[1].trim();
@@ -75,11 +73,9 @@ function parseLeadText(raw: string): Partial<LeadForm> {
     if (nameMatch) result.name = nameMatch[1].trim();
   }
 
-  // ── Email ─────────────────────────────────────────────────────────────────
   const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   if (emailMatch) result.email = emailMatch[0];
 
-  // ── Budget ────────────────────────────────────────────────────────────────
   const budgetRange = text.match(/(\d+\.?\d*)\s*(k)?\s*[-–to]+\s*(\d+\.?\d*)\s*(k)?/i);
   if (budgetRange) {
     const v1 = parseFloat(budgetRange[1]);
@@ -96,7 +92,6 @@ function parseLeadText(raw: string): Partial<LeadForm> {
     }
   }
 
-  // ── Accommodation Type ────────────────────────────────────────────────────
   if (/\b1\s*sharing\b|single\s*(room|sharing|occupancy)?/i.test(text))      result.accommodationType = "Single";
   else if (/\b2\s*sharing\b|double\s*(room|sharing|occupancy)?/i.test(text)) result.accommodationType = "Double";
   else if (/\b3\s*sharing\b|triple\s*(room|sharing|occupancy)?/i.test(text)) result.accommodationType = "Triple";
@@ -104,11 +99,9 @@ function parseLeadText(raw: string): Partial<LeadForm> {
   else if (/private\s*room/i.test(text))                                     result.accommodationType = "Private Room";
   else if (/flat|apartment|\d\s*bhk/i.test(text))                            result.accommodationType = "Entire Flat";
 
-  // ── Number of People ──────────────────────────────────────────────────────
   const peopleMatch = text.match(/(\d+)\s*(?:people|person|persons|boys|girls|bed|pax|heads)/i);
   if (peopleMatch) result.numberOfPeople = peopleMatch[1];
 
-  // ── Preferred Location ────────────────────────────────────────────────────
   const blrAreas = [
     "koramangala", "hsr layout", "hsr", "indiranagar", "whitefield",
     "marathahalli", "electronic city", "bellandur", "sarjapur", "btm",
@@ -129,7 +122,6 @@ function parseLeadText(raw: string): Partial<LeadForm> {
     if (locMatch) result.preferredLocation = locMatch[1].trim();
   }
 
-  // ── Move-in Date ──────────────────────────────────────────────────────────
   const datePatterns = [
     /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/,
     /(\d{4})-(\d{2})-(\d{2})/,
@@ -154,11 +146,9 @@ function parseLeadText(raw: string): Partial<LeadForm> {
     }
   }
 
-  // ── Gender ────────────────────────────────────────────────────────────────
   if (/\bfemale|girl|women|lady|ladies\b/i.test(text)) result.gender = "Female";
   else if (/\bmale|boy\b/i.test(text))                 result.gender = "Male";
 
-  // ── Occupation & Sub-Pipeline ─────────────────────────────────────────────
   if (/\bstudent|college|university|btech|mtech|mba|bca|mca|degree\b/i.test(text)) {
     result.subPipeline = "Student";
     result.occupation = "Student";
@@ -178,11 +168,9 @@ function parseLeadText(raw: string): Partial<LeadForm> {
     result.occupation = "Intern";
   }
 
-  // ── Company / College ─────────────────────────────────────────────────────
   const companyMatch = text.match(/(?:at|from|works? at|working at|company[:\s]+|college[:\s]+|employer[:\s]+)([A-Z][A-Za-z\s&.]{2,30})(?:,|\.|$|\n)/);
   if (companyMatch) result.company = companyMatch[1].trim();
 
-  // ── Source ────────────────────────────────────────────────────────────────
   if (/whatsapp/i.test(text))                       result.source = "WhatsApp";
   else if (/instagram|insta\b/i.test(text))         result.source = "Instagram";
   else if (/facebook|\bfb\b/i.test(text))           result.source = "Facebook";
@@ -193,15 +181,26 @@ function parseLeadText(raw: string): Partial<LeadForm> {
   else if (/walk.?in/i.test(text))                  result.source = "Walk-in";
   else if (/website|online/i.test(text))            result.source = "Website";
 
-  // ── In BLR ────────────────────────────────────────────────────────────────
   if (/\bin blr|in bangalore|currently in|already in|staying in\b/i.test(text))      result.inBlr = "INBLR";
   else if (/\bnot in|outside|coming from|relocat|moving to bangalore\b/i.test(text)) result.inBlr = "NOBLR";
 
-  // ── Notes ─────────────────────────────────────────────────────────────────
   const noteMatch = text.match(/(?:note|requirement|need|want|looking for|special)[:\s]+(.+?)(?:\.|$)/i);
   if (noteMatch) result.notes = noteMatch[1].trim();
 
   return result;
+}
+
+// ─── Budget enum mapper ───────────────────────────────────────────────────────
+
+function getBudgetEnum(min: string): string | undefined {
+  const v = Number(min);
+  if (!v) return undefined;
+  if (v < 8000)  return "Under ₹5L";
+  if (v < 12000) return "₹5L–₹10L";
+  if (v < 20000) return "₹10L–₹20L";
+  if (v < 30000) return "₹20L–₹30L";
+  if (v < 50000) return "₹30L–₹50L";
+  return "Above ₹50L";
 }
 
 // ─── Tab styles ───────────────────────────────────────────────────────────────
@@ -470,10 +469,6 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
     setError("");
 
     try {
-      const budgetStr = form.budgetMin
-        ? `₹${Number(form.budgetMin).toLocaleString("en-IN")}${form.budgetMax ? `–₹${Number(form.budgetMax).toLocaleString("en-IN")}` : "+"}`
-        : undefined;
-
       const payload = {
         name:        form.name,
         phone:       form.phone,
@@ -486,7 +481,7 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
         stage:       form.stage,
         inBlr:       form.inBlr || undefined,
         subPipeline: form.subPipeline || undefined,
-        budget:      budgetStr,
+        budget:      getBudgetEnum(form.budgetMin),
         preferredLocality: form.preferredLocation || undefined,
         notes: [
           form.notes,
