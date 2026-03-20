@@ -59,34 +59,152 @@ const AGE_GROUPS = ["18-22", "22-26", "26-30", "30+"];
 const PRIORITIES = ["Low", "Medium", "High"];
 const SUB_PIPELINES = ["Student", "Working Professional", "Family", "Corporate", "Other"];
 
-// ─── AI Text Parser ───────────────────────────────────────────────────────────
+// ─── FREE Smart Parser (no API, no cost) ─────────────────────────────────────
 
 function parseLeadText(raw: string): Partial<LeadForm> {
   const result: Partial<LeadForm> = {};
-  const phoneMatch = raw.match(/(?:\+91[-\s]?)?([6-9]\d{9})/);
+  const text = raw.trim();
+  const lower = text.toLowerCase();
+
+  // ── Phone ────────────────────────────────────────────────────────────────
+  const phoneMatch = text.match(/(?:\+91[-.\s]?|91[-.\s]?|0)?([6-9]\d{9})/);
   if (phoneMatch) result.phone = phoneMatch[1];
-  const beforePhone = raw.split(/[6-9]\d{9}/)[0];
-  const nameMatch = beforePhone.match(/([A-Z][a-z]+(?: [A-Z][a-z]+)*)/);
-  if (nameMatch) result.name = nameMatch[1].trim();
-  const budgetMatch = raw.match(/[₹Rs.]?\s*(\d[\d,]*)\s*[-–to]+\s*(\d[\d,k]*)/i);
-  if (budgetMatch) {
-    result.budgetMin = budgetMatch[1].replace(/,/g, "").replace(/k/i, "000");
-    result.budgetMax = budgetMatch[2].replace(/,/g, "").replace(/k/i, "000");
+
+  // ── Name ─────────────────────────────────────────────────────────────────
+  const namedMatch = text.match(/(?:name|naam)[:\s]+([A-Za-z]+(?: [A-Za-z]+){0,3})/i);
+  if (namedMatch) {
+    result.name = namedMatch[1].trim();
   } else {
-    const singleBudget = raw.match(/(?:budget|rent)[:\s]+[₹Rs.]?\s*(\d[\d,k]+)/i);
-    if (singleBudget) result.budgetMin = singleBudget[1].replace(/,/g, "").replace(/k/i, "000");
+    const beforePhone = phoneMatch ? text.split(phoneMatch[0])[0] : text;
+    const nameMatch = beforePhone.match(/([A-Z][a-z]+(?: [A-Z][a-z]+){0,2})/);
+    if (nameMatch) result.name = nameMatch[1].trim();
   }
-  const locMatch = raw.match(/(?:in|near|at|location|area)[:\s]+([A-Za-z\s,]+?)(?:\.|,|\n|budget|for|₹|$)/i);
-  if (locMatch) result.preferredLocation = locMatch[1].trim();
-  for (const t of ACCOMMODATION_TYPES) {
-    if (raw.toLowerCase().includes(t.toLowerCase())) { result.accommodationType = t; break; }
+
+  // ── Email ─────────────────────────────────────────────────────────────────
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (emailMatch) result.email = emailMatch[0];
+
+  // ── Budget ────────────────────────────────────────────────────────────────
+  const budgetRange = text.match(/(?:budget|rent|pay|upto|up to)?[:\s]*[₹Rs.]?\s*(\d+\.?\d*)\s*(k)?\s*[-–to]+\s*[₹Rs.]?\s*(\d+\.?\d*)\s*(k)?/i);
+  if (budgetRange) {
+    const toNum = (val: string, k?: string) => String(parseFloat(val) * (k ? 1000 : parseFloat(val) < 500 ? 1000 : 1));
+    result.budgetMin = toNum(budgetRange[1], budgetRange[2]);
+    result.budgetMax = toNum(budgetRange[3], budgetRange[4]);
+  } else {
+    const singleBudget = text.match(/(?:budget|rent|pay|upto)[:\s]*[₹Rs.]?\s*(\d+\.?\d*)\s*(k)?/i);
+    if (singleBudget) {
+      const val = parseFloat(singleBudget[1]);
+      const actual = String(singleBudget[2] ? val * 1000 : val < 500 ? val * 1000 : val);
+      result.budgetMin = actual;
+      result.budgetMax = actual;
+    }
   }
-  const peopleMatch = raw.match(/(\d+)\s*(?:people|person|persons|boys|girls|bed)/i);
+
+  // ── Accommodation Type ────────────────────────────────────────────────────
+  if (/\b1\s*sharing\b|single\s*(room|sharing|occupancy)?/i.test(text))       result.accommodationType = "Single";
+  else if (/\b2\s*sharing\b|double\s*(room|sharing|occupancy)?/i.test(text))  result.accommodationType = "Double";
+  else if (/\b3\s*sharing\b|triple\s*(room|sharing|occupancy)?/i.test(text))  result.accommodationType = "Triple";
+  else if (/\b4\s*sharing\b|quad/i.test(text))                                result.accommodationType = "Quad";
+  else if (/private\s*room/i.test(text))                                      result.accommodationType = "Private Room";
+  else if (/flat|apartment|\d\s*bhk/i.test(text))                             result.accommodationType = "Entire Flat";
+
+  // ── Number of People ──────────────────────────────────────────────────────
+  const peopleMatch = text.match(/(\d+)\s*(?:people|person|persons|boys|girls|bed|pax|heads)/i);
   if (peopleMatch) result.numberOfPeople = peopleMatch[1];
-  if (/whatsapp/i.test(raw)) result.source = "WhatsApp";
-  else if (/referral|referred/i.test(raw)) result.source = "Referral";
-  if (/student/i.test(raw)) result.subPipeline = "Student";
-  else if (/working|professional|employee/i.test(raw)) result.subPipeline = "Working Professional";
+
+  // ── Preferred Location (Bangalore areas) ─────────────────────────────────
+  const blrAreas = [
+    "koramangala", "hsr layout", "hsr", "indiranagar", "whitefield",
+    "marathahalli", "electronic city", "bellandur", "sarjapur", "btm",
+    "jayanagar", "jp nagar", "banashankari", "hebbal", "yelahanka",
+    "mg road", "domlur", "egl", "kadubeesanahalli", "kr puram",
+    "bommanahalli", "silk board", "haralur", "varthur", "kadugodi",
+    "mahadevapura", "cv raman nagar", "old airport road", "kalyan nagar",
+    "banaswadi", "nagawara", "thanisandra", "hennur", "devanahalli",
+  ];
+  const foundAreas: string[] = [];
+  for (const area of blrAreas) {
+    if (lower.includes(area)) foundAreas.push(area.replace(/\b\w/g, c => c.toUpperCase()));
+  }
+  if (foundAreas.length) {
+    result.preferredLocation = foundAreas.join(", ");
+  } else {
+    const locMatch = text.match(/(?:in|near|at|location|area|locality)[:\s]+([A-Za-z][A-Za-z\s,]{2,30})(?:\.|,|\n|budget|for|₹|$)/i);
+    if (locMatch) result.preferredLocation = locMatch[1].trim();
+  }
+
+  // ── Move-in Date ──────────────────────────────────────────────────────────
+  const datePatterns = [
+    /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/,
+    /(\d{4})-(\d{2})-(\d{2})/,
+    /(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:\s+(\d{4}))?/i,
+    /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{4}))?/i,
+  ];
+  for (const pattern of datePatterns) {
+    const m = text.match(pattern);
+    if (m) {
+      try {
+        const d = new Date(m[0]);
+        if (!isNaN(d.getTime())) { result.moveInDate = d.toISOString().split("T")[0]; break; }
+      } catch { /* skip */ }
+    }
+  }
+  if (!result.moveInDate) {
+    if (/immediate|asap|urgent|right away|right now/i.test(text)) {
+      result.moveInDate = new Date().toISOString().split("T")[0];
+    } else if (/next month/i.test(text)) {
+      const d = new Date(); d.setMonth(d.getMonth() + 1);
+      result.moveInDate = d.toISOString().split("T")[0];
+    }
+  }
+
+  // ── Gender ────────────────────────────────────────────────────────────────
+  if (/\bfemale|girl|women|lady|ladies\b/i.test(text))  result.gender = "Female";
+  else if (/\bmale|boy\b/i.test(text))                  result.gender = "Male";
+
+  // ── Occupation & Sub-Pipeline ─────────────────────────────────────────────
+  if (/\bstudent|college|university|btech|mtech|mba|bca|mca|degree\b/i.test(text)) {
+    result.subPipeline = "Student";
+    result.occupation = "Student";
+  } else if (/\bworking|professional|employee|job|software|engineer|developer|analyst|manager|consultant\b/i.test(text)) {
+    result.subPipeline = "Working Professional";
+    if (/software engineer/i.test(text))      result.occupation = "Software Engineer";
+    else if (/developer/i.test(text))         result.occupation = "Developer";
+    else if (/data analyst/i.test(text))      result.occupation = "Data Analyst";
+    else if (/analyst/i.test(text))           result.occupation = "Analyst";
+    else if (/manager/i.test(text))           result.occupation = "Manager";
+    else if (/consultant/i.test(text))        result.occupation = "Consultant";
+    else                                       result.occupation = "Working Professional";
+  } else if (/\bfamily|couple|married\b/i.test(text)) {
+    result.subPipeline = "Family";
+  } else if (/\bintern\b/i.test(text)) {
+    result.subPipeline = "Working Professional";
+    result.occupation = "Intern";
+  }
+
+  // ── Company / College ─────────────────────────────────────────────────────
+  const companyMatch = text.match(/(?:at|from|works? at|working at|company[:\s]+|college[:\s]+|employer[:\s]+)([A-Z][A-Za-z\s&.]{2,30})(?:,|\.|$|\n)/);
+  if (companyMatch) result.company = companyMatch[1].trim();
+
+  // ── Source ────────────────────────────────────────────────────────────────
+  if (/whatsapp/i.test(text))                   result.source = "WhatsApp";
+  else if (/instagram|insta\b/i.test(text))     result.source = "Instagram";
+  else if (/facebook|\bfb\b/i.test(text))       result.source = "Facebook";
+  else if (/referr|referred|reference/i.test(text)) result.source = "Referral";
+  else if (/housing\.com/i.test(text))          result.source = "Housing.com";
+  else if (/99acres/i.test(text))               result.source = "99acres";
+  else if (/magic\s*bricks/i.test(text))        result.source = "MagicBricks";
+  else if (/walk.?in/i.test(text))              result.source = "Walk-in";
+  else if (/website|online/i.test(text))        result.source = "Website";
+
+  // ── In BLR ────────────────────────────────────────────────────────────────
+  if (/\bin blr|in bangalore|currently in|already in|staying in\b/i.test(text))   result.inBlr = "INBLR";
+  else if (/\bnot in|outside|coming from|relocat|moving to bangalore\b/i.test(text)) result.inBlr = "NOBLR";
+
+  // ── Notes ─────────────────────────────────────────────────────────────────
+  const noteMatch = text.match(/(?:note|requirement|need|want|looking for|special)[:\s]+(.+?)(?:\.|$)/i);
+  if (noteMatch) result.notes = noteMatch[1].trim();
+
   return result;
 }
 
@@ -260,8 +378,6 @@ function SourceTab({ form, set }: { form: LeadForm; set: (f: string, v: string) 
 function QualifyTab({ form, set }: { form: LeadForm; set: (f: string, v: string) => void }) {
   return (
     <div className="space-y-4">
-
-      {/* INBLR / NOBLR */}
       <div>
         <Label className={labelCls}>Location Type</Label>
         <div className="flex gap-2 mt-1">
@@ -269,22 +385,17 @@ function QualifyTab({ form, set }: { form: LeadForm; set: (f: string, v: string)
             <button type="button" key={v} onClick={() => set("inBlr", form.inBlr === v ? "" : v)}
               className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
                 form.inBlr === v
-                  ? v === "INBLR"
-                    ? "bg-emerald-50 border-emerald-400 text-emerald-700"
+                  ? v === "INBLR" ? "bg-emerald-50 border-emerald-400 text-emerald-700"
                     : "bg-orange-50 border-orange-400 text-orange-700"
                   : "border-slate-200 text-slate-500 hover:bg-slate-50"
               }`}
-            >
-              {v === "INBLR" ? "🏙 INBLR" : "🛣 NOBLR"}
-            </button>
+            >{v === "INBLR" ? "🏙 INBLR" : "🛣 NOBLR"}</button>
           ))}
         </div>
         <p className="text-[10px] text-slate-400 mt-1">
           {form.inBlr === "INBLR" ? "Inside Bangalore" : form.inBlr === "NOBLR" ? "Outside / Not in Bangalore" : "Select if lead is inside or outside Bangalore"}
         </p>
       </div>
-
-      {/* Sub-Pipeline */}
       <div>
         <Label className={labelCls}>Sub-Pipeline</Label>
         <div className="grid grid-cols-3 gap-2 mt-1">
@@ -297,8 +408,6 @@ function QualifyTab({ form, set }: { form: LeadForm; set: (f: string, v: string)
           ))}
         </div>
       </div>
-
-      {/* Initial Stage */}
       <div>
         <Label className={labelCls}>Initial Stage</Label>
         <div className="grid grid-cols-3 gap-2 mt-1">
@@ -311,14 +420,10 @@ function QualifyTab({ form, set }: { form: LeadForm; set: (f: string, v: string)
           ))}
         </div>
       </div>
-
-      {/* Tags */}
       <div>
         <Label className={labelCls}>Tags <span className="text-slate-400 font-normal">(comma-separated)</span></Label>
         <Input className={inputCls} placeholder="investor, urgent, student" value={form.tags} onChange={e => set("tags", e.target.value)} />
       </div>
-
-      {/* Notes */}
       <div>
         <Label className={labelCls}>Notes</Label>
         <Textarea
@@ -356,7 +461,7 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
     const parsed = parseLeadText(pasteText);
     setForm(prev => ({ ...prev, ...parsed }));
     setPasteText("");
-    toast.success("Fields auto-filled from pasted text");
+    toast.success("Fields auto-filled ✨");
   }
 
   async function submit() {
@@ -389,11 +494,11 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
         preferredLocality: form.preferredLocation || undefined,
         notes: [
           form.notes,
-          form.occupation      ? `Occupation: ${form.occupation}` : "",
-          form.company         ? `Company/College: ${form.company}` : "",
-          form.gender          ? `Gender: ${form.gender}` : "",
-          form.ageGroup        ? `Age: ${form.ageGroup}` : "",
-          form.moveInDate      ? `Move-in: ${form.moveInDate}` : "",
+          form.occupation        ? `Occupation: ${form.occupation}` : "",
+          form.company           ? `Company/College: ${form.company}` : "",
+          form.gender            ? `Gender: ${form.gender}` : "",
+          form.ageGroup          ? `Age: ${form.ageGroup}` : "",
+          form.moveInDate        ? `Move-in: ${form.moveInDate}` : "",
           form.numberOfPeople !== "1" ? `People: ${form.numberOfPeople}` : "",
           form.accommodationType ? `Accommodation: ${form.accommodationType}` : "",
         ].filter(Boolean).join("\n") || undefined,
@@ -441,7 +546,7 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
         </DialogHeader>
 
         <div className="px-6 pt-4">
-          {/* AI Paste Box */}
+          {/* Smart Paste Box */}
           <div className="mb-4 rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-3">
             <p className="text-xs text-amber-700 font-medium mb-1.5 flex items-center gap-1">
               <Sparkles size={11} /> Paste lead info — name, phone, budget, location...
@@ -449,7 +554,8 @@ const AddLeadDialog = ({ onCreated }: AddLeadDialogProps) => {
             <Textarea
               value={pasteText}
               onChange={e => setPasteText(e.target.value)}
-              placeholder={"e.g. Rahul Sharma 9876543210 2BHK Koramangala budget 15-20k"}
+              onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleParse(); }}
+              placeholder="e.g. Rahul Sharma 9876543210 2BHK Koramangala budget 15-20k working professional"
               rows={2}
               className="text-xs border-0 bg-transparent resize-none p-0 focus-visible:ring-0 placeholder:text-amber-400"
             />
