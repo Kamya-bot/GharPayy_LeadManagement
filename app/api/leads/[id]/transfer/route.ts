@@ -4,16 +4,17 @@ import Lead from "@/models/Lead";
 import { attachLeadIntelligence } from "@/lib/leadScoring";
 
 // PATCH /api/leads/[id]/transfer
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await dbConnect();
 
+  const { id } = await params;
   const { toZone, performedBy, reason } = await req.json();
 
   if (!toZone) {
     return NextResponse.json({ error: "toZone is required" }, { status: 400 });
   }
 
-  const lead = await Lead.findById(params.id);
+  const lead = await Lead.findById(id);
   if (!lead) {
     return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   }
